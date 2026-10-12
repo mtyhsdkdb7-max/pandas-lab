@@ -1021,26 +1021,26 @@ function renderCharts() {
   if (D.chartInstance) { D.chartInstance.dispose(); D.chartInstance = null; }
   const chart = echarts.init(box);
   D.chartInstance = chart;
-  window.addEventListener('resize', () => chart.resize());
 
   const accentColors = ['#38bdf8','#a78bfa','#34d399','#fbbf24','#f472b6','#f87171','#818cf8','#2dd4bf'];
 
   const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
   const xCol = getVal('chartX'), yCol = getVal('chartY'), colorCol = getVal('chartColor');
 
-  if (D.chartType === 'hist') {
-    const vals = colValues(xCol);
+  const noData = () => {
     chart.setOption({
-      tooltip:{trigger:'axis'},
-      grid:{left:50,right:20,top:20,bottom:40},
-      xAxis:{type:'value', name:xCol, nameLocation:'middle', nameGap:25, axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
-      yAxis:{type:'value', name:'count', axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
-      series:[{type:'histogram', data:vals, itemStyle:{color:'#38bdf8', borderRadius:[3,3,0,0]}},
-      ]
+      title: { text: 'No data to display', subtext: 'Try resetting data or choosing different columns', left:'center', top:'center',
+        textStyle:{color:'#475569',fontSize:16}, subtextStyle:{color:'#475569',fontSize:12} }
     });
-    // ECharts doesn't have native histogram series type; use bar with computed bins
-    const bins = 30;
+    setTimeout(()=>chart.resize(),100);
+  };
+
+  if (D.chartType === 'hist') {
+    const vals = colValues(xCol).filter(v => !isNaN(v));
+    if (vals.length < 2) { noData(); return; }
+    const bins = Math.min(30, Math.max(5, Math.floor(vals.length/5)));
     const min = Math.min(...vals), max = Math.max(...vals);
+    if (max === min) { noData(); return; }
     const step = (max-min)/bins;
     const counts = new Array(bins).fill(0);
     vals.forEach(v => { const idx = Math.min(bins-1, Math.floor((v-min)/step)); counts[idx]++; });
@@ -1163,6 +1163,7 @@ function renderCharts() {
       series:[{type:'heatmap',data:heatmapData,label:{show:true,fontSize:10,color:'#e2e8f0',formatter:p=>p.value[2].toFixed(2)}}]
     });
   }
+  setTimeout(()=>chart.resize(), 50);
 }
 
 /* ============ Modal / Operations ============ */
@@ -1188,7 +1189,6 @@ function handleOp(op) {
   if (op.startsWith('chart:')) {
     D.chartType = op.split(':')[1];
     switchView('charts');
-    renderChartsToolbar(); renderCharts();
     return;
   }
   switch(op) {
@@ -1315,8 +1315,8 @@ function switchView(v) {
   D.view = v;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
   document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + v));
-  if (v === 'charts') setTimeout(() => renderCharts(), 50);
-  if (v === 'stats') setTimeout(() => renderStats(), 50);
+  if (v === 'charts') { renderChartsToolbar(); setTimeout(() => { renderCharts(); setTimeout(()=>{ if(D.chartInstance) D.chartInstance.resize(); }, 100); }, 100); }
+  if (v === 'stats') setTimeout(() => renderStats(), 100);
 }
 
 /* ============ Events ============ */
