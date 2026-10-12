@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PandasLab · 可视化数据分析工作台</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📊</text></svg>">
+<link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+:root {
+  --bg: #0b0e14;
+  --surface: #11151f;
+  --elevated: #171c28;
+  --hover: #1e2536;
+  --border: #232a3a;
+  --border-light: #2e3648;
+  --accent: #38bdf8;
+  --accent-dim: rgba(56,189,248,0.12);
+  --accent-glow: rgba(56,189,248,0.25);
+  --text: #e2e8f0;
+  --text-muted: #64748b;
+  --text-dim: #475569;
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --purple: #a78bfa;
+  --pink: #f472b6;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --mono: 'JetBrains Mono', 'Noto Sans SC', monospace;
+  --sans: 'Space Grotesk', 'Noto Sans SC', -apple-system, sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html, body { height:100%; overflow:hidden; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+}
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width:8px; height:8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a3144; border-radius:4px; }
+::-webkit-scrollbar-thumb:hover { background: #3a4258; }
+
+/* ===== Layout ===== */
+.app { display:flex; flex-direction:column; height:100vh; }
+.topbar {
+  height:54px; min-height:54px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display:flex; align-items:center; padding: 0 16px; gap:16px;
+  z-index:10;
+}
+.main { display:flex; flex:1; overflow:hidden; }
+.sidebar {
+  width:260px; min-width:260px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y:auto; padding:12px;
+}
+.content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+
+/* ===== Topbar ===== */
+.logo { display:flex; align-items:center; gap:10px; font-weight:800; font-size:16px; letter-spacing:-0.3px; }
+.logo-icon {
+  width:30px; height:30px; border-radius:7px;
+  background: linear-gradient(135deg, var(--accent), #818cf8);
+  display:flex; align-items:center; justify-content:center;
+  font-size:15px; color:#fff; font-weight:800;
+}
+.logo span.brand { background: linear-gradient(135deg, #e2e8f0, #94a3b8); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.tabs { display:flex; gap:4px; margin-left:20px; }
+.tab-btn {
+  padding:6px 14px; border-radius:var(--radius-sm);
+  background:transparent; border:none; color:var(--text-muted);
+  cursor:pointer; font-size:13px; font-weight:500; font-family:var(--sans);
+  transition: all .15s;
+}
+.tab-btn:hover { color:var(--text); background:var(--hover); }
+.tab-btn.active { background:var(--accent-dim); color:var(--accent); }
+.topbar-right { margin-left:auto; display:flex; align-items:center; gap:8px; }
+.data-info { font-size:11px; color:var(--text-dim); font-family:var(--mono); margin-right:8px; }
+
+/* ===== Buttons ===== */
+.btn {
+  padding:6px 12px; border-radius:var(--radius-sm);
+  border:1px solid var(--border); background:var(--elevated);
+  color:var(--text); cursor:pointer; font-size:12px; font-weight:500;
+  font-family:var(--sans); transition:all .15s;
+  display:inline-flex; align-items:center; gap:5px;
+}
+.btn:hover { background:var(--hover); border-color:var(--border-light); }
+.btn-primary { background:var(--accent); color:#0b0e14; border-color:var(--accent); font-weight:600; }
+.btn-primary:hover { background:#7dd3fc; }
+.btn-sm { padding:4px 9px; font-size:11px; }
+.btn-danger { color:var(--danger); border-color:rgba(248,113,113,0.3); }
+.btn-danger:hover { background:rgba(248,113,113,0.1); }
+.btn-ghost { border-color:transparent; background:transparent; color:var(--text-muted); }
+.btn-ghost:hover { background:var(--hover); color:var(--text); }
+
+/* ===== Sidebar ===== */
+.side-section { margin-bottom:6px; }
+.side-header {
+  display:flex; align-items:center; gap:8px;
+  padding:7px 8px; cursor:pointer; border-radius:var(--radius-sm);
+  font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.8px;
+  color:var(--text-muted); transition:all .15s; user-select:none;
+}
+.side-header:hover { background:var(--hover); color:var(--text); }
+.side-header .arrow { margin-left:auto; transition:transform .2s; font-size:10px; }
+.side-section.open .side-header .arrow { transform:rotate(90deg); }
+.side-body { display:none; padding:4px 0 8px; }
+.side-section.open .side-body { display:block; }
+.op-btn {
+  display:flex; align-items:center; gap:8px; width:100%;
+  padding:7px 10px; border-radius:var(--radius-sm);
+  background:transparent; border:none; color:var(--text);
+  cursor:pointer; font-size:12.5px; text-align:left; font-family:var(--sans);
+  transition:all .12s; margin:1px 0;
+}
+.op-btn:hover { background:var(--hover); }
+.op-btn .icon { width:16px; text-align:center; font-size:13px; opacity:0.7; }
+.op-btn .desc { font-size:10px; color:var(--text-dim); margin-left:auto; font-family:var(--mono); }
+
+/* ===== Content area ===== */
+.view { display:none; flex:1; overflow:hidden; flex-direction:column; }
+.view.active { display:flex; }
+
+/* Table view */
+.table-wrap { flex:1; overflow:auto; background:var(--surface); margin:12px; border-radius:var(--radius); border:1px solid var(--border); }
+table.data { width:100%; border-collapse:collapse; font-size:12px; font-family:var(--mono); }
+table.data th {
+  position:sticky; top:0; z-index:2;
+  background:var(--elevated); padding:8px 12px; text-align:left;
+  font-weight:600; font-size:11px; color:var(--text-muted);
+  border-bottom:1px solid var(--border); cursor:pointer; white-space:nowrap;
+  user-select:none;
+}
+table.data th:hover { color:var(--text); }
+table.data th .sort-ind { font-size:9px; margin-left:4px; color:var(--accent); }
+table.data td { padding:6px 12px; border-bottom:1px solid rgba(35,42,58,0.5); white-space:nowrap; }
+table.data tr:hover td { background:rgba(56,189,248,0.03); }
+table.data td.num { text-align:right; color:var(--accent); }
+table.data td.null { color:var(--danger); font-style:italic; }
+.table-footer {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:8px 16px; background:var(--surface); border-top:1px solid var(--border);
+  font-size:11px; color:var(--text-muted); font-family:var(--mono);
+}
+.pagination { display:flex; gap:4px; align-items:center; }
+.page-btn {
+  width:26px; height:26px; border-radius:4px; border:1px solid var(--border);
+  background:var(--elevated); color:var(--text); cursor:pointer; font-size:11px;
+  display:flex; align-items:center; justify-content:center;
+}
+.page-btn:hover { background:var(--hover); }
+.page-btn:disabled { opacity:0.3; cursor:default; }
+.page-info { margin:0 8px; }
+
+/* Stats view */
+.stats-grid { flex:1; overflow:auto; padding:16px; display:grid; grid-template-columns:1fr 1fr; gap:12px; align-content:start; }
+.stat-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  overflow:hidden;
+}
+.stat-card.full { grid-column:1/-1; }
+.stat-card-title {
+  padding:10px 14px; font-size:12px; font-weight:600; color:var(--text-muted);
+  border-bottom:1px solid var(--border); display:flex; align-items:center; gap:8px;
+  text-transform:uppercase; letter-spacing:0.5px;
+}
+.stat-card-body { padding:12px 14px; }
+table.stat { width:100%; border-collapse:collapse; font-size:11.5px; font-family:var(--mono); }
+table.stat th { text-align:right; padding:5px 10px; color:var(--text-dim); font-weight:500; border-bottom:1px solid var(--border); }
+table.stat th:first-child { text-align:left; }
+table.stat td { text-align:right; padding:5px 10px; border-bottom:1px solid rgba(35,42,58,0.4); }
+table.stat td:first-child { text-align:left; color:var(--text-muted); }
+table.stat tr:hover td { background:rgba(56,189,248,0.03); }
+
+/* Overview chips */
+.chip-row { display:flex; flex-wrap:wrap; gap:8px; }
+.chip {
+  padding:6px 12px; background:var(--elevated); border:1px solid var(--border);
+  border-radius:20px; font-size:11px; font-family:var(--mono);
+}
+.chip b { color:var(--accent); }
+.dtype-badge {
+  display:inline-block; padding:1px 6px; border-radius:3px;
+  font-size:10px; font-family:var(--mono); font-weight:500;
+}
+.dtype-int { background:rgba(56,189,248,0.15); color:var(--accent); }
+.dtype-float { background:rgba(167,139,250,0.15); color:var(--purple); }
+.dtype-str { background:rgba(52,211,153,0.15); color:var(--success); }
+.dtype-bool { background:rgba(251,191,36,0.15); color:var(--warning); }
+
+/* Charts view */
+.charts-toolbar {
+  display:flex; align-items:center; gap:10px; padding:10px 16px;
+  background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap;
+}
+.charts-main { flex:1; padding:16px; overflow:hidden; }
+.chart-box { width:100%; height:100%; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+select, input[type=text], input[type=number] {
+  background:var(--elevated); border:1px solid var(--border); color:var(--text);
+  padding:5px 10px; border-radius:var(--radius-sm); font-size:12px; font-family:var(--sans);
+  outline:none; min-width:80px;
+}
+select:focus, input:focus { border-color:var(--accent); }
+label.field-label { font-size:11px; color:var(--text-muted); }
+
+/* ===== Modal ===== */
+.modal-overlay {
+  position:fixed; inset:0; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px);
+  display:none; align-items:center; justify-content:center; z-index:100;
+}
+.modal-overlay.show { display:flex; }
+.modal {
+  background:var(--elevated); border:1px solid var(--border-light);
+  border-radius:12px; padding:20px; width:420px; max-width:90vw;
+  box-shadow:0 20px 60px rgba(0,0,0,0.5);
+}
+.modal h3 { font-size:15px; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+.modal .field { margin-bottom:12px; }
+.modal .field label { display:block; font-size:11px; color:var(--text-muted); margin-bottom:4px; }
+.modal .field select, .modal .field input { width:100%; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+
+/* ===== Toast ===== */
+.toast {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(80px);
+  background:var(--elevated); border:1px solid var(--border-light);
+  padding:10px 20px; border-radius:8px; font-size:13px;
+  box-shadow:0 8px 30px rgba(0,0,0,0.4); z-index:200;
+  transition:transform .3s ease;
+}
+.toast.show { transform:translateX(-50%) translateY(0); }
+.toast.success { border-left:3px solid var(--success); }
+.toast.error { border-left:3px solid var(--danger); }
+
+/* ===== Dropzone ===== */
+.dropzone {
+  border:2px dashed var(--border-light); border-radius:var(--radius);
+  padding:40px; text-align:center; color:var(--text-muted);
+  cursor:pointer; transition:all .2s; margin:12px;
+}
+.dropzone:hover, .dropzone.dragover { border-color:var(--accent); background:var(--accent-dim); color:var(--accent); }
+
+/* History bar */
+.history-bar {
+  padding:6px 16px; background:var(--surface); border-top:1px solid var(--border);
+  font-size:11px; font-family:var(--mono); color:var(--text-dim);
+  overflow-x:auto; white-space:nowrap; max-height:32px;
+}
+.history-bar .op { display:inline-block; margin-right:12px; color:var(--accent); }
+.history-bar .op:hover { color:var(--text); cursor:pointer; }
+
+/* empty state */
+.empty-state { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; color:var(--text-dim); gap:12px; }
+.empty-state .big-icon { font-size:48px; opacity:0.3; }
+
+@media (max-width: 900px) {
+  .sidebar { width:200px; min-width:200px; }
+  .stats-grid { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ===== Topbar ===== -->
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-icon">P</div>
+      <span class="brand">PandasLab</span>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn active" data-view="table" data-i18n="tabTable">数据表</button>
+      <button class="tab-btn" data-view="stats" data-i18n="tabStats">统计摘要</button>
+      <button class="tab-btn" data-view="charts" data-i18n="tabCharts">可视化</button>
+    </div>
+    <div class="topbar-right">
+      <span class="data-info" id="dataInfo"></span>
+      <button class="btn btn-sm" id="btnLoadCSV" data-i18n="loadCSV">导入 CSV</button>
+      <button class="btn btn-sm btn-ghost" id="btnReset" data-i18n="resetData">重置数据</button>
+      <button class="btn btn-sm" id="btnLang">EN</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- ===== Sidebar ===== -->
+    <div class="sidebar" id="sidebar">
+      <!-- sections injected by JS -->
+    </div>
+
+    <!-- ===== Content ===== -->
+    <div class="content">
+      <!-- Table view -->
+      <div class="view active" id="view-table">
+        <div class="table-wrap">
+          <table class="data" id="dataTable">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="rowRange"></span>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </div>
+
+      <!-- Stats view -->
+      <div class="view" id="view-stats">
+        <div class="stats-grid" id="statsGrid"></div>
+      </div>
+
+      <!-- Charts view -->
+      <div class="view" id="view-charts">
+        <div class="charts-toolbar" id="chartsToolbar"></div>
+        <div class="charts-main">
+          <div class="chart-box" id="chartBox"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- History bar -->
+  <div class="history-bar" id="historyBar"><span data-i18n="history">操作历史</span></div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalBox"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Hidden file input -->
+<input type="file" id="fileInput" accept=".csv" style="display:none">
+
+<script>
+/* ============ I18n ============ */
+const I18N = {
+  zh: {
+    appName:'PandasLab', tabTable:'数据表', tabStats:'统计摘要', tabCharts:'可视化',
+    loadCSV:'导入 CSV', resetData:'重置数据', history:'操作历史',
+    // sidebar sections
+    secInspect:'数据查看', secClean:'数据清洗', secTransform:'数据变换', secViz:'图表类型',
+    // inspect ops
+    opHead:'前 N 行', opTail:'后 N 行', opInfo:'数据概览 info()', opDescribe:'统计描述 describe()', opDtypes:'字段类型 dtypes', opMissing:'缺失值统计',
+    // clean ops
+    opDropna:'删除缺失值 dropna()', opFillna:'填充缺失值 fillna()', opDropDup:'删除重复行 drop_duplicates()', opRename:'重命名字段 rename()', opDropCol:'删除字段 drop()', opAstype:'转换类型 astype()',
+    // transform ops
+    opFilter:'条件筛选 query()', opSort:'排序 sort_values()', opGroupby:'分组聚合 groupby()', opValueCounts:'值计数 value_counts()', opSelectCols:'选择字段 subset',
+    // viz
+    vizHist:'直方图 Histogram', vizScatter:'散点图 Scatter', vizBar:'柱状图 Bar', vizLine:'折线图 Line', vizBox:'箱线图 Box', vizHeatmap:'相关性热力图', vizPie:'饼图 Pie',
+    // misc
+    rows:'行', cols:'列', showing:'显示', 'of':'共',
+    confirmApply:'应用', cancel:'取消', enterValue:'输入值',
+    sortAsc:'升序', sortDesc:'降序',
+    aggMean:'平均值 mean', aggSum:'求和 sum', aggCount:'计数 count', aggMin:'最小值 min', aggMax:'最大值 max', aggMedian:'中位数 median', aggStd:'标准差 std',
+    toastDataLoaded:'数据已加载', toastReset:'已重置为默认数据',
+    noData:'请先加载数据', selectColumn:'选择字段', selectX:'X 轴字段', selectY:'Y 轴字段', selectColor:'分组字段(可选)',
+    chooseChart:'选择图表类型',
+    rowsVar:'行数', colsVar:'列数', missingCells:'缺失单元格', memUsage:'估算内存',
+    describeTitle:'统计描述 (describe)', dtypeTitle:'字段类型 (dtypes)', missingTitle:'缺失值分析',
+    corrTitle:'相关性矩阵', overviewTitle:'数据概览',
+    method:'方法', targetCol:'目标字段', fillValue:'填充值',
+    newColName:'新字段名', oldColName:'原字段名',
+    conditionCol:'字段', conditionOp:'条件', conditionVal:'值',
+    gt:'>', lt:'<', gte:'>=', lte:'<=', eq:'==', neq:'!=',
+    groupCol:'分组字段', aggCol:'聚合字段', aggFunc:'聚合函数',
+    fillMean:'列均值', fillMedian:'列中位数', fillMode:'列众数', fillCustom:'自定义值',
+    dropRows:'删除含缺失的行', dropCols:'删除含缺失的列',
+    nRows:'行数 N',
+  },
+  en: {
+    appName:'PandasLab', tabTable:'Table', tabStats:'Statistics', tabCharts:'Charts',
+    loadCSV:'Load CSV', resetData:'Reset Data', history:'History',
+    secInspect:'Inspection', secClean:'Cleaning', secTransform:'Transformation', secViz:'Chart Type',
+    opHead:'Head — first N rows', opTail:'Tail — last N rows', opInfo:'Data Info info()', opDescribe:'Describe describe()', opDtypes:'Dtypes', opMissing:'Missing Values',
+    opDropna:'Drop NA dropna()', opFillna:'Fill NA fillna()', opDropDup:'Drop Duplicates', opRename:'Rename Column', opDropCol:'Drop Column', opAstype:'Change dtype',
+    opFilter:'Query / Filter', opSort:'Sort Values', opGroupby:'GroupBy + Agg', opValueCounts:'Value Counts', opSelectCols:'Select Columns',
+    vizHist:'Histogram', vizScatter:'Scatter Plot', vizBar:'Bar Chart', vizLine:'Line Chart', vizBox:'Box Plot', vizHeatmap:'Correlation Heatmap', vizPie:'Pie Chart',
+    rows:'rows', cols:'cols', showing:'Showing', 'of':'of',
+    confirmApply:'Apply', cancel:'Cancel', enterValue:'Enter value',
+    sortAsc:'Ascending', sortDesc:'Descending',
+    aggMean:'Mean', aggSum:'Sum', aggCount:'Count', aggMin:'Min', aggMax:'Max', aggMedian:'Median', aggStd:'Std',
+    toastDataLoaded:'Data loaded', toastReset:'Reset to default dataset',
+    noData:'Please load data first', selectColumn:'Select column', selectX:'X axis', selectY:'Y axis', selectColor:'Group by (optional)',
+    chooseChart:'Choose chart type',
+    rowsVar:'Rows', colsVar:'Columns', missingCells:'Missing cells', memUsage:'Est. memory',
+    describeTitle:'Statistical Description (describe)', dtypeTitle:'Data Types (dtypes)', missingTitle:'Missing Value Analysis',
+    corrTitle:'Correlation Matrix', overviewTitle:'Overview',
+    method:'Method', targetCol:'Target column', fillValue:'Fill value',
+    newColName:'New column name', oldColName:'Old column name',
+    conditionCol:'Column', conditionOp:'Operator', conditionVal:'Value',
+    gt:'>', lt:'<', gte:'>=', lte:'<=', eq:'==', neq:'!=',
+    groupCol:'Group by column', aggCol:'Aggregate column', aggFunc:'Aggregate function',
+    fillMean:'Column mean', fillMedian:'Column median', fillMode:'Column mode', fillCustom:'Custom value',
+    dropRows:'Drop rows with NA', dropCols:'Drop cols with NA',
+    nRows:'N rows',
+  }
+};
+let LANG = 'zh';
+function t(key) { return I18N[LANG][key] || I18N.zh[key] || key; }
+
+/* ============ State ============ */
+let D = {
+  columns: [],
+  data: [],        // array of objects
+  types: {},       // col -> 'int'|'float'|'str'|'bool'
+  original: null,  // backup for reset
+  page: 0,
+  pageSize: 50,
+  sortCol: null,
+  sortAsc: true,
+  chartType: 'hist',
+  chartInstance: null,
+  history: [],
+  view: 'table',
+};
+
+/* ============ Default Dataset Generation ============ */
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function generateDefaultData() {
+  const rnd = mulberry32(42);
+  const categories = ['Electronics','Clothing','Home & Kitchen','Sports','Books','Beauty','Toys','Grocery'];
+  const regions = ['North','South','East','West','Central'];
+  const genders = ['Male','Female'];
+  const products = {
+    'Electronics': ['Laptop','Smartphone','Headphones','Monitor','Keyboard'],
+    'Clothing': ['T-Shirt','Jeans','Jacket','Sneakers','Dress'],
+    'Home & Kitchen': ['Blender','Cookware','Bedding','Vacuum','Lamp'],
+    'Sports': ['Yoga Mat','Dumbbells','Bicycle','Tennis Racket','Running Shoes'],
+    'Books': ['Novel','Textbook','Comic','Biography','Cookbook'],
+    'Beauty': ['Skincare Set','Perfume','Makeup','Shampoo','Moisturizer'],
+    'Toys': ['Puzzle','Action Figure','Board Game','Building Blocks','Plush Toy'],
+    'Grocery': ['Coffee','Snacks','Olive Oil','Pasta','Tea Set'],
+  };
+  const unitPrices = {
+    'Laptop':899,'Smartphone':699,'Headphones':199,'Monitor':299,'Keyboard':89,
+    'T-Shirt':25,'Jeans':60,'Jacket':120,'Sneakers':80,'Dress':70,
+    'Blender':150,'Cookware':200,'Bedding':90,'Vacuum':350,'Lamp':45,
+    'Yoga Mat':30,'Dumbbells':120,'Bicycle':450,'Tennis Racket':110,'Running Shoes':95,
+    'Novel':15,'Textbook':80,'Comic':12,'Biography':25,'Cookbook':35,
+    'Skincare Set':85,'Perfume':120,'Makeup':55,'Shampoo':12,'Moisturizer':40,
+    'Puzzle':18,'Action Figure':25,'Board Game':35,'Building Blocks':50,'Plush Toy':20,
+    'Coffee':15,'Snacks':20,'Olive Oil':18,'Pasta':8,'Tea Set':45,
+  };
+  const rows = [];
+  const N = 240;
+  for (let i = 0; i < N; i++) {
+    const cat = categories[Math.floor(rnd() * categories.length)];
+    const prodList = products[cat];
+    const prod = prodList[Math.floor(rnd() * prodList.length)];
+    const region = regions[Math.floor(rnd() * regions.length)];
+    const price = unitPrices[prod];
+    const qty = Math.floor(rnd() * 5) + 1;
+    const discount = rnd() < 0.3 ? Math.round((rnd() * 0.3) * 100) / 100 : 0;
+    const sales = Math.round(price * qty * (1 - discount) * 100) / 100;
+    const age = Math.floor(rnd() * 45) + 18;
+    const gender = genders[Math.floor(rnd() * 2)];
+    const rating = Math.round((rnd() * 4 + 1) * 10) / 10;
+    const shipping = Math.round((rnd() * 15 + 3) * 100) / 100;
+    const month = Math.floor(rnd() * 12) + 1;
+    const day = Math.floor(rnd() * 28) + 1;
+    const date = `2024-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    // inject some missing values
+    let custAge = age;
+    let r = rating;
+    let disc = discount;
+    if (rnd() < 0.05) custAge = null;
+    if (rnd() < 0.04) r = null;
+    if (rnd() < 0.03) disc = null;
+    rows.push({
+      order_id: 'ORD-' + String(10001 + i),
+      order_date: date,
+      category: cat,
+      product: prod,
+      region: region,
+      unit_price: price,
+      quantity: qty,
+      discount: disc,
+      sales: sales,
+      customer_age: custAge,
+      gender: gender,
+      rating: r,
+      shipping_cost: shipping,
+    });
+  }
+  return rows;
+}
+
+/* ============ Type detection ============ */
+function detectTypes(rows, cols) {
+  const types = {};
+  cols.forEach(c => {
+    let allNum = true, allInt = true, hasNull = false;
+    rows.forEach(r => {
+      const v = r[c];
+      if (v === null || v === undefined || v === '') { hasNull = true; return; }
+      if (typeof v === 'number') {
+        if (!Number.isInteger(v)) allInt = false;
+      } else {
+        const n = Number(v);
+        if (isNaN(n)) allNum = false;
+        else if (!Number.isInteger(n)) allInt = false;
+      }
+    });
+    if (allNum && rows.some(r => r[c] !== null && r[c] !== undefined && r[c] !== '')) {
+      types[c] = allInt ? 'int' : 'float';
+    } else {
+      types[c] = 'str';
+    }
+  });
+  return types;
+}
+
+function coerceRow(row) {
+  const out = {};
+  for (const k in row) {
+    let v = row[k];
+    if (v === '' || v === undefined) v = null;
+    out[k] = v;
+  }
+  return out;
+}
+
+function loadData(rows) {
+  if (!rows || rows.length === 0) return;
+  const cols = Object.keys(rows[0]);
+  rows = rows.map(coerceRow);
+  D.columns = cols;
+  D.data = rows;
+  D.types = detectTypes(rows, cols);
+  D.original = JSON.parse(JSON.stringify({ columns: cols, data: rows, types: D.types }));
+  D.page = 0; D.sortCol = null; D.history = [];
+  renderAll();
+}
+
+/* ============ Pandas-like operations ============ */
+function isNum(c) { return D.types[c] === 'int' || D.types[c] === 'float'; }
+
+function opHead(n) {
+  D.data = D.data.slice(0, n);
+  addHistory(`head(${n})`);
+}
+function opTail(n) {
+  D.data = D.data.slice(-n);
+  addHistory(`tail(${n})`);
+}
+function opDropna(axis) {
+  if (axis === 0) {
+    D.data = D.data.filter(r => D.columns.every(c => r[c] !== null && r[c] !== ''));
+  } else {
+    const keep = D.columns.filter(c => !D.data.some(r => r[c] === null || r[c] === ''));
+    dropColumns(keep);
+  }
+  addHistory(`dropna(axis='${axis}')`);
+}
+function opFillna(col, method, customVal) {
+  let fill;
+  const vals = D.data.map(r => Number(r[col])).filter(v => !isNaN(v));
+  if (method === 'mean') fill = vals.reduce((a,b)=>a+b,0)/vals.length;
+  else if (method === 'median') { vals.sort((a,b)=>a-b); fill = vals[Math.floor(vals.length/2)]; }
+  else if (method === 'mode') {
+    const freq = {}; vals.forEach(v=>freq[v]=(freq[v]||0)+1);
+    fill = Object.keys(freq).sort((a,b)=>freq[b]-freq[a])[0];
+  } else fill = Number(customVal);
+  D.data.forEach(r => { if (r[col] === null || r[col] === '') r[col] = fill; });
+  D.types[col] = isNumCol(col) ? (Number.isInteger(fill)?'int':'float') : 'str';
+  addHistory(`fillna(${col}, ${method})`);
+}
+function isNumCol(col) { return D.types[col]==='int' || D.types[col]==='float'; }
+
+function opDropDup() {
+  const seen = new Set();
+  const before = D.data.length;
+  D.data = D.data.filter(r => {
+    const key = JSON.stringify(r);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+  addHistory(`drop_duplicates() [${before}→${D.data.length}]`);
+}
+function opRename(oldC, newC) {
+  if (!newC.trim()) return;
+  D.columns = D.columns.map(c => c === oldC ? newC : c);
+  D.data.forEach(r => { r[newC] = r[oldC]; delete r[oldC]; });
+  D.types[newC] = D.types[oldC]; delete D.types[oldC];
+  addHistory(`rename(${oldC} → ${newC})`);
+}
+function dropColumns(keepCols) {
+  const removed = D.columns.filter(c => !keepCols.includes(c));
+  D.columns = keepCols;
+  D.data.forEach(r => removed.forEach(c => delete r[c]));
+  removed.forEach(c => delete D.types[c]);
+}
+function opDropCol(col) {
+  dropColumns(D.columns.filter(c => c !== col));
+  addHistory(`drop('${col}')`);
+}
+function opAstype(col, newType) {
+  D.data.forEach(r => {
+    if (r[col] === null) return;
+    if (newType === 'int') r[col] = Math.round(Number(r[col]));
+    else if (newType === 'float') r[col] = Number(r[col]);
+    else r[col] = String(r[col]);
+  });
+  D.types[col] = newType;
+  addHistory(`astype('${col}', ${newType})`);
+}
+function opFilter(col, op, val) {
+  const isNum = isNumCol(col);
+  const numVal = Number(val);
+  D.data = D.data.filter(r => {
+    let v = r[col];
+    if (v === null || v === '') return false;
+    if (isNum) v = Number(v);
+    else v = String(v);
+    switch(op) {
+      case '>': return v > numVal;
+      case '<': return v < numVal;
+      case '>=': return v >= numVal;
+      case '<=': return v <= numVal;
+      case '==': return String(v) === String(val);
+      case '!=': return String(v) !== String(val);
+    }
+    return true;
+  });
+  addHistory(`query(${col} ${op} ${val})`);
+}
+function opSort(col, asc) {
+  D.data.sort((a,b) => {
+    let va = a[col], vb = b[col];
+    if (isNumCol(col)) { va = Number(va)||0; vb = Number(vb)||0; }
+    else { va = String(va); vb = String(vb); }
+    if (va < vb) return asc ? -1 : 1;
+    if (va > vb) return asc ? 1 : -1;
+    return 0;
+  });
+  D.sortCol = col; D.sortAsc = asc;
+  addHistory(`sort_values('${col}', asc=${asc})`);
+}
+function opGroupby(groupCol, aggCol, func) {
+  const groups = {};
+  D.data.forEach(r => {
+    const k = r[groupCol] === null ? 'NaN' : String(r[groupCol]);
+    if (!groups[k]) groups[k] = [];
+    if (r[aggCol] !== null && r[aggCol] !== '') groups[k].push(Number(r[aggCol]));
+  });
+  const result = Object.entries(groups).map(([k, vals]) => {
+    let v;
+    switch(func) {
+      case 'mean': v = vals.reduce((a,b)=>a+b,0)/vals.length; break;
+      case 'sum': v = vals.reduce((a,b)=>a+b,0); break;
+      case 'count': v = vals.length; break;
+      case 'min': v = Math.min(...vals); break;
+      case 'max': v = Math.max(...vals); break;
+      case 'median': vals.sort((a,b)=>a-b); v = vals[Math.floor(vals.length/2)]; break;
+      case 'std': {
+        const m = vals.reduce((a,b)=>a+b,0)/vals.length;
+        v = Math.sqrt(vals.reduce((a,b)=>a+(b-m)**2,0)/vals.length); break;
+      }
+    }
+    return { [groupCol]: k, [aggCol+'_'+func]: Math.round(v*100)/100 };
+  });
+  // replace current data with grouped result
+  D.columns = [groupCol, aggCol+'_'+func];
+  D.data = result;
+  D.types = {};
+  D.types[groupCol] = 'str';
+  D.types[aggCol+'_'+func] = 'float';
+  addHistory(`groupby(${groupCol}).${func}(${aggCol})`);
+}
+function opValueCounts(col) {
+  const freq = {};
+  D.data.forEach(r => {
+    const k = r[col] === null ? 'NaN' : String(r[col]);
+    freq[k] = (freq[k]||0) + 1;
+  });
+  const result = Object.entries(freq).sort((a,b)=>b[1]-a[1]).map(([k,v]) => ({ [col]: k, count: v }));
+  D.columns = [col, 'count'];
+  D.data = result;
+  D.types = {};
+  D.types[col] = 'str'; D.types['count'] = 'int';
+  addHistory(`value_counts('${col}')`);
+}
+function opSelectCols(cols) {
+  dropColumns(cols);
+  addHistory(`[${cols.join(', ')}]`);
+}
+
+function addHistory(op) {
+  D.history.push(op);
+  renderHistory();
+}
+
+/* ============ Rendering ============ */
+function renderAll() {
+  renderSidebar();
+  renderTable();
+  renderStats();
+  renderChartsToolbar();
+  renderHistory();
+  updateDataInfo();
+}
+
+function updateDataInfo() {
+  document.getElementById('dataInfo').textContent =
+    `${D.data.length} ${t('rows')} × ${D.columns.length} ${t('cols')}`;
+}
+
+function renderSidebar() {
+  const sb = document.getElementById('sidebar');
+  const sections = [
+    { id:'inspect', title: t('secInspect'), ops:[
+      {icon:'◇', label:t('opHead'), act:'head'},
+      {icon:'◇', label:t('opTail'), act:'tail'},
+      {icon:'◇', label:t('opInfo'), act:'info'},
+      {icon:'◇', label:t('opDescribe'), act:'describe'},
+      {icon:'◇', label:t('opDtypes'), act:'dtypes'},
+      {icon:'◇', label:t('opMissing'), act:'missing'},
+    ]},
+    { id:'clean', title: t('secClean'), ops:[
+      {icon:'◇', label:t('opDropna'), act:'dropna'},
+      {icon:'◇', label:t('opFillna'), act:'fillna'},
+      {icon:'◇', label:t('opDropDup'), act:'dropdup'},
+      {icon:'◇', label:t('opRename'), act:'rename'},
+      {icon:'◇', label:t('opDropCol'), act:'dropcol'},
+      {icon:'◇', label:t('opAstype'), act:'astype'},
+    ]},
+    { id:'transform', title: t('secTransform'), ops:[
+      {icon:'◇', label:t('opFilter'), act:'filter'},
+      {icon:'◇', label:t('opSort'), act:'sort'},
+      {icon:'◇', label:t('opGroupby'), act:'groupby'},
+      {icon:'◇', label:t('opValueCounts'), act:'valuecounts'},
+      {icon:'◇', label:t('opSelectCols'), act:'selectcols'},
+    ]},
+    { id:'viz', title: t('secViz'), ops:[
+      {icon:'◇', label:t('vizHist'), act:'chart:hist'},
+      {icon:'◇', label:t('vizScatter'), act:'chart:scatter'},
+      {icon:'◇', label:t('vizBar'), act:'chart:bar'},
+      {icon:'◇', label:t('vizLine'), act:'chart:line'},
+      {icon:'◇', label:t('vizBox'), act:'chart:box'},
+      {icon:'◇', label:t('vizHeatmap'), act:'chart:heatmap'},
+      {icon:'◇', label:t('vizPie'), act:'chart:pie'},
+    ]},
+  ];
+  sb.innerHTML = sections.map((sec,si) => `
+    <div class="side-section ${si<3?'open':''}" data-sec="${sec.id}">
+      <div class="side-header" onclick="this.parentElement.classList.toggle('open')">
+        <span>${sec.title}</span><span class="arrow">▶</span>
+      </div>
+      <div class="side-body">
+        ${sec.ops.map(op => `<button class="op-btn" data-op="${op.act}"><span class="icon">${op.icon}</span>${op.label}</button>`).join('')}
+      </div>
+    </div>
+  `).join('');
+  sb.querySelectorAll('.op-btn').forEach(btn => {
+    btn.addEventListener('click', () => handleOp(btn.dataset.op));
+  });
+}
+
+function renderHistory() {
+  const hb = document.getElementById('historyBar');
+  hb.innerHTML = `<span style="opacity:0.5">${t('history')}:</span> ` +
+    (D.history.length === 0 ? '<span style="opacity:0.3">—</span>' :
+    D.history.slice(-10).map(h => `<span class="op" title="${h}">${h}</span>`).join(' → '));
+}
+
+function renderTable() {
+  const thead = document.getElementById('tableHead');
+  const tbody = document.getElementById('tableBody');
+  const totalPages = Math.max(1, Math.ceil(D.data.length / D.pageSize));
+  if (D.page >= totalPages) D.page = totalPages - 1;
+  const start = D.page * D.pageSize;
+  const pageRows = D.data.slice(start, start + D.pageSize);
+
+  thead.innerHTML = '<tr>' + D.columns.map((c,i) => {
+    const sortInd = D.sortCol === c ? (D.sortAsc ? '▲' : '▼') : '';
+    return `<th data-col="${i}">${escapeHtml(c)} <span class="sort-ind">${sortInd}</span></th>`;
+  }).join('') + '</tr>';
+  thead.querySelectorAll('th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = D.columns[parseInt(th.dataset.col)];
+      opSort(col, D.sortCol === col ? !D.sortAsc : true);
+      renderTable(); renderStats(); renderCharts();
+    });
+  });
+
+  tbody.innerHTML = pageRows.map(r => '<tr>' + D.columns.map(c => {
+    let v = r[c];
+    if (v === null || v === undefined || v === '') return '<td class="null">NaN</td>';
+    if (typeof v === 'number') return `<td class="num">${Number.isInteger(v)?v:v.toFixed(2)}</td>`;
+    return `<td>${escapeHtml(String(v))}</td>`;
+  }).join('') + '</tr>').join('');
+
+  document.getElementById('rowRange').textContent =
+    `${t('showing')} ${start+1}–${Math.min(start+D.pageSize, D.data.length)} ${t('of')} ${D.data.length}`;
+
+  const pg = document.getElementById('pagination');
+  let pgHtml = `<button class="page-btn" ${D.page===0?'disabled':''} onclick="D.page=0;renderTable()">«</button>`;
+  pgHtml += `<button class="page-btn" ${D.page===0?'disabled':''} onclick="D.page--;renderTable()">‹</button>`;
+  pgHtml += `<span class="page-info">${D.page+1} / ${totalPages}</span>`;
+  pgHtml += `<button class="page-btn" ${D.page>=totalPages-1?'disabled':''} onclick="D.page++;renderTable()">›</button>`;
+  pgHtml += `<button class="page-btn" ${D.page>=totalPages-1?'disabled':''} onclick="D.page=${totalPages-1};renderTable()">»</button>`;
+  pg.innerHTML = pgHtml;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ===== Statistics ===== */
+function colValues(col) {
+  return D.data.map(r => Number(r[col])).filter(v => !isNaN(v));
+}
+function statsOf(arr) {
+  if (arr.length === 0) return {};
+  const n = arr.length;
+  const mean = arr.reduce((a,b)=>a+b,0)/n;
+  const sorted = [...arr].sort((a,b)=>a-b);
+  const median = n%2 ? sorted[(n-1)/2] : (sorted[n/2-1]+sorted[n/2])/2;
+  const variance = arr.reduce((a,b)=>a+(b-mean)**2,0)/n;
+  return {
+    count:n, mean:Math.round(mean*100)/100, std:Math.round(Math.sqrt(variance)*100)/100,
+    min:Math.round(sorted[0]*100)/100,
+    '25%':Math.round(sorted[Math.floor(n*0.25)]*100)/100,
+    '50%':Math.round(median*100)/100,
+    '75%':Math.round(sorted[Math.floor(n*0.75)]*100)/100,
+    max:Math.round(sorted[n-1]*100)/100,
+  };
+}
+
+function renderStats() {
+  const grid = document.getElementById('statsGrid');
+  const numCols = D.columns.filter(isNum);
+  const missing = {};
+  D.columns.forEach(c => {
+    missing[c] = D.data.filter(r => r[c]===null||r[c]==='').length;
+  });
+  const totalMissing = Object.values(missing).reduce((a,b)=>a+b,0);
+
+  let html = '';
+
+  // Overview
+  html += `<div class="stat-card">
+    <div class="stat-card-title">${t('overviewTitle')}</div>
+    <div class="stat-card-body">
+      <div class="chip-row">
+        <div class="chip">${t('rowsVar')}: <b>${D.data.length}</b></div>
+        <div class="chip">${t('colsVar')}: <b>${D.columns.length}</b></div>
+        <div class="chip">${t('missingCells')}: <b style="color:${totalMissing>0?'var(--warning)':'var(--success)'}">${totalMissing}</b></div>
+        <div class="chip">Numeric: <b>${numCols.length}</b></div>
+        <div class="chip">Categorical: <b>${D.columns.length - numCols.length}</b></div>
+      </div>
+    </div>
+  </div>`;
+
+  // Dtypes
+  html += `<div class="stat-card">
+    <div class="stat-card-title">${t('dtypeTitle')}</div>
+    <div class="stat-card-body" style="max-height:260px;overflow:auto">
+      <table class="stat"><tr><th>Column</th><th>Type</th><th>Non-Null</th><th>Missing</th></tr>
+      ${D.columns.map(c => {
+        const nn = D.data.length - missing[c];
+        return `<tr><td>${escapeHtml(c)}</td>
+          <td><span class="dtype-badge dtype-${D.types[c]}">${D.types[c]}</span></td>
+          <td>${nn}</td>
+          <td style="color:${missing[c]>0?'var(--warning)':'var(--text-dim)'}">${missing[c]}</td></tr>`;
+      }).join('')}
+      </table>
+    </div>
+  </div>`;
+
+  // Describe
+  if (numCols.length > 0) {
+    const statsRows = numCols.map(c => statsOf(colValues(c)));
+    const keys = ['count','mean','std','min','25%','50%','75%','max'];
+    html += `<div class="stat-card full">
+      <div class="stat-card-title">${t('describeTitle')}</div>
+      <div class="stat-card-body" style="overflow:auto">
+        <table class="stat"><tr><th>statistic</th>${numCols.map(c=>`<th>${escapeHtml(c)}</th>`).join('')}</tr>
+        ${keys.map(k => `<tr><td>${k}</td>${statsRows.map(s=>`<td>${s[k]??'—'}</td>`).join('')}</tr>`).join('')}
+        </table>
+      </div>
+    </div>`;
+  }
+
+  // Correlation heatmap container
+  if (numCols.length >= 2) {
+    html += `<div class="stat-card full">
+      <div class="stat-card-title">${t('corrTitle')}</div>
+      <div class="stat-card-body"><div id="corrChart" style="height:320px"></div></div>
+    </div>`;
+  }
+
+  grid.innerHTML = html;
+
+  // Render correlation chart
+  if (numCols.length >= 2) {
+    const corr = computeCorrelation(numCols);
+    const chart = echarts.init(document.getElementById('corrChart'));
+    const heatmapData = [];
+    for (let i = 0; i < numCols.length; i++) {
+      for (let j = 0; j < numCols.length; j++) {
+        heatmapData.push([j, i, corr[i][j]]);
+      }
+    }
+    chart.setOption({
+      tooltip: { position:'top', formatter: p => `${numCols[p.value[1]]} × ${numCols[p.value[0]]}<br/>r = ${p.value[2].toFixed(3)}` },
+      grid: { left:100, right:30, top:20, bottom:60 },
+      xAxis: { type:'category', data:numCols, axisLabel:{color:'#64748b',fontSize:11,rotate:30}, splitArea:{show:true} },
+      yAxis: { type:'category', data:numCols, axisLabel:{color:'#64748b',fontSize:11}, splitArea:{show:true} },
+      visualMap: { min:-1, max:1, calculable:true, orient:'horizontal', left:'center', bottom:0,
+        inRange:{ color:['#f87171','#1c2330','#38bdf8'] }, textStyle:{color:'#64748b'} },
+      series: [{ type:'heatmap', data:heatmapData, label:{show:true, fontSize:10, color:'#e2e8f0', formatter: p => p.value[2].toFixed(2)},
+        emphasis:{ itemStyle:{ shadowBlur:10, shadowColor:'rgba(0,0,0,0.5)' } } }]
+    });
+    window.addEventListener('resize', () => chart.resize());
+  }
+}
+
+function computeCorrelation(cols) {
+  const n = cols.length;
+  const mat = [];
+  for (let i = 0; i < n; i++) {
+    mat.push(new Array(n).fill(0));
+    mat[i][i] = 1;
+  }
+  for (let i = 0; i < n; i++) {
+    for (let j = i+1; j < n; j++) {
+      const xs = [], ys = [];
+      D.data.forEach(r => {
+        const x = Number(r[cols[i]]), y = Number(r[cols[j]]);
+        if (!isNaN(x) && !isNaN(y)) { xs.push(x); ys.push(y); }
+      });
+      if (xs.length < 2) continue;
+      const mx = xs.reduce((a,b)=>a+b,0)/xs.length;
+      const my = ys.reduce((a,b)=>a+b,0)/ys.length;
+      let num=0, dx=0, dy=0;
+      for (let k=0;k<xs.length;k++) {
+        num += (xs[k]-mx)*(ys[k]-my);
+        dx += (xs[k]-mx)**2; dy += (ys[k]-my)**2;
+      }
+      const r = num / (Math.sqrt(dx*dy) || 1);
+      mat[i][j] = Math.round(r*1000)/1000;
+      mat[j][i] = mat[i][j];
+    }
+  }
+  return mat;
+}
+
+/* ===== Charts ===== */
+function renderChartsToolbar() {
+  const tb = document.getElementById('chartsToolbar');
+  const numCols = D.columns.filter(isNum);
+  const catCols = D.columns.filter(c => !isNum(c));
+  const chartNames = { hist:t('vizHist'), scatter:t('vizScatter'), bar:t('vizBar'), line:t('vizLine'), box:t('vizBox'), heatmap:t('vizHeatmap'), pie:t('vizPie') };
+
+  let html = `<label class="field-label">${t('chooseChart')}:</label>
+    <select id="chartType">`;
+  for (const [k,v] of Object.entries(chartNames)) {
+    html += `<option value="${k}" ${D.chartType===k?'selected':''}>${v}</option>`;
+  }
+  html += `</select>`;
+
+  // dynamic controls
+  if (D.chartType === 'hist') {
+    const defX = numCols.includes('sales') ? 'sales' : numCols[0];
+    html += `<label class="field-label">X:</label><select id="chartX">${numCols.map(c=>`<option ${c===defX?'selected':''}>${c}</option>`).join('')}</select>`;
+  } else if (D.chartType === 'scatter') {
+    const defX = numCols.includes('unit_price') ? 'unit_price' : numCols[0];
+    const defY = numCols.includes('sales') ? 'sales' : (numCols[1]||numCols[0]);
+    html += `<label class="field-label">X:</label><select id="chartX">${numCols.map(c=>`<option ${c===defX?'selected':''}>${c}</option>`).join('')}</select>`;
+    html += `<label class="field-label">Y:</label><select id="chartY">${numCols.map(c=>`<option ${c===defY?'selected':''}>${c}</option>`).join('')}</select>`;
+    html += `<label class="field-label">${t('selectColor')}:</label><select id="chartColor"><option value="">—</option>${catCols.map(c=>`<option>${c}</option>`).join('')}</select>`;
+  } else if (D.chartType === 'bar' || D.chartType === 'pie') {
+    const defX = D.columns.includes('category') ? 'category' : D.columns[0];
+    const defY = numCols.includes('sales') ? 'sales' : numCols[0];
+    html += `<label class="field-label">X:</label><select id="chartX">${D.columns.map(c=>`<option ${c===defX?'selected':''}>${c}</option>`).join('')}</select>`;
+    html += `<label class="field-label">Y:</label><select id="chartY">${numCols.map(c=>`<option ${c===defY?'selected':''}>${c}</option>`).join('')}</select>`;
+  } else if (D.chartType === 'line') {
+    const defX = D.columns.includes('order_date') ? 'order_date' : D.columns[0];
+    const defY = numCols.includes('sales') ? 'sales' : numCols[0];
+    html += `<label class="field-label">X:</label><select id="chartX">${D.columns.map(c=>`<option ${c===defX?'selected':''}>${c}</option>`).join('')}</select>`;
+    html += `<label class="field-label">Y:</label><select id="chartY">${numCols.map(c=>`<option ${c===defY?'selected':''}>${c}</option>`).join('')}</select>`;
+  } else if (D.chartType === 'box') {
+    const defX = D.columns.includes('category') ? 'category' : D.columns[0];
+    const defY = numCols.includes('sales') ? 'sales' : numCols[0];
+    html += `<label class="field-label">X:</label><select id="chartX">${D.columns.map(c=>`<option ${c===defX?'selected':''}>${c}</option>`).join('')}</select>`;
+    html += `<label class="field-label">Y:</label><select id="chartY">${numCols.map(c=>`<option ${c===defY?'selected':''}>${c}</option>`).join('')}</select>`;
+  } else if (D.chartType === 'heatmap') {
+    html += `<span style="color:var(--text-muted);font-size:12px">${t('corrTitle')}</span>`;
+  }
+  html += `<button class="btn btn-primary btn-sm" onclick="renderCharts()">${t('confirmApply')}</button>`;
+  tb.innerHTML = html;
+
+  document.getElementById('chartType').addEventListener('change', e => {
+    D.chartType = e.target.value;
+    renderChartsToolbar(); renderCharts();
+  });
+}
+
+function renderCharts() {
+  const box = document.getElementById('chartBox');
+  if (!box) return;
+  if (D.chartInstance) { D.chartInstance.dispose(); D.chartInstance = null; }
+  const chart = echarts.init(box);
+  D.chartInstance = chart;
+  window.addEventListener('resize', () => chart.resize());
+
+  const accentColors = ['#38bdf8','#a78bfa','#34d399','#fbbf24','#f472b6','#f87171','#818cf8','#2dd4bf'];
+
+  const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
+  const xCol = getVal('chartX'), yCol = getVal('chartY'), colorCol = getVal('chartColor');
+
+  if (D.chartType === 'hist') {
+    const vals = colValues(xCol);
+    chart.setOption({
+      tooltip:{trigger:'axis'},
+      grid:{left:50,right:20,top:20,bottom:40},
+      xAxis:{type:'value', name:xCol, nameLocation:'middle', nameGap:25, axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      yAxis:{type:'value', name:'count', axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      series:[{type:'histogram', data:vals, itemStyle:{color:'#38bdf8', borderRadius:[3,3,0,0]}},
+      ]
+    });
+    // ECharts doesn't have native histogram series type; use bar with computed bins
+    const bins = 30;
+    const min = Math.min(...vals), max = Math.max(...vals);
+    const step = (max-min)/bins;
+    const counts = new Array(bins).fill(0);
+    vals.forEach(v => { const idx = Math.min(bins-1, Math.floor((v-min)/step)); counts[idx]++; });
+    const labels = counts.map((_,i) => (min + i*step).toFixed(1));
+    chart.setOption({
+      tooltip:{trigger:'axis'},
+      grid:{left:50,right:20,top:20,bottom:50},
+      xAxis:{type:'category', data:labels, axisLabel:{color:'#64748b',fontSize:10,rotate:45,interval:2}},
+      yAxis:{type:'value', axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      series:[{type:'bar', data:counts, itemStyle:{color:'#38bdf8', borderRadius:[2,2,0,0]}}]
+    });
+  }
+  else if (D.chartType === 'scatter') {
+    let series;
+    if (colorCol) {
+      const groups = {};
+      D.data.forEach(r => {
+        const k = String(r[colorCol]);
+        if (!groups[k]) groups[k] = [];
+        if (r[xCol]!==null && r[yCol]!==null) groups[k].push([Number(r[xCol]), Number(r[yCol])]);
+      });
+      series = Object.entries(groups).map(([k,vals,i]) => ({
+        name:k, type:'scatter', data:vals,
+        itemStyle:{color:accentColors[i%accentColors.length], opacity:0.7}
+      }));
+    } else {
+      const pts = D.data.filter(r=>r[xCol]!==null&&r[yCol]!==null).map(r=>[Number(r[xCol]),Number(r[yCol])]);
+      series = [{type:'scatter', data:pts, itemStyle:{color:'#38bdf8',opacity:0.7}}];
+    }
+    chart.setOption({
+      tooltip:{trigger:'item', formatter:p=>`${p.seriesName||''}<br/>${xCol}: ${p.value[0]}<br/>${yCol}: ${p.value[1]}`},
+      legend:{textStyle:{color:'#64748b'}, top:5},
+      grid:{left:60,right:20,top:40,bottom:50},
+      xAxis:{type:'value', name:xCol, nameLocation:'middle', nameGap:30, axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      yAxis:{type:'value', name:yCol, axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      series
+    });
+  }
+  else if (D.chartType === 'bar') {
+    const groups = {};
+    D.data.forEach(r => {
+      const k = String(r[xCol]);
+      if (!groups[k]) groups[k] = [];
+      if (r[yCol]!==null && r[yCol]!=='') groups[k].push(Number(r[yCol]));
+    });
+    const labels = Object.keys(groups).sort();
+    const vals = labels.map(k => Math.round(groups[k].reduce((a,b)=>a+b,0)/groups[k].length * 100)/100);
+    chart.setOption({
+      tooltip:{trigger:'axis'},
+      grid:{left:60,right:20,top:20,bottom:80},
+      xAxis:{type:'category', data:labels, axisLabel:{color:'#64748b',rotate:45,fontSize:11}},
+      yAxis:{type:'value', axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      series:[{type:'bar', data:vals, itemStyle:{color:'#38bdf8', borderRadius:[4,4,0,0]}}]
+    });
+  }
+  else if (D.chartType === 'line') {
+    const sorted = [...D.data].sort((a,b) => String(a[xCol]).localeCompare(String(b[xCol])));
+    const labels = sorted.map(r => String(r[xCol]));
+    const vals = sorted.map(r => Number(r[yCol]));
+    chart.setOption({
+      tooltip:{trigger:'axis'},
+      grid:{left:60,right:20,top:20,bottom:60},
+      xAxis:{type:'category', data:labels, axisLabel:{color:'#64748b',rotate:45,fontSize:10}, boundaryGap:false},
+      yAxis:{type:'value', axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      series:[{type:'line', data:vals, smooth:true, symbol:'circle', symbolSize:6,
+        lineStyle:{color:'#38bdf8',width:2}, itemStyle:{color:'#38bdf8'},
+        areaStyle:{color:'rgba(56,189,248,0.1)'}}]
+    });
+  }
+  else if (D.chartType === 'box') {
+    const groups = {};
+    D.data.forEach(r => {
+      const k = String(r[xCol]);
+      if (!groups[k]) groups[k] = [];
+      if (r[yCol]!==null && r[yCol]!=='') groups[k].push(Number(r[yCol]));
+    });
+    const labels = Object.keys(groups);
+    const boxData = labels.map(k => {
+      const v = [...groups[k]].sort((a,b)=>a-b);
+      const q = p => v[Math.floor(v.length*p)];
+      return [v[0], q(0.25), q(0.5), q(0.75), v[v.length-1]];
+    });
+    chart.setOption({
+      tooltip:{trigger:'item'},
+      grid:{left:60,right:20,top:20,bottom:60},
+      xAxis:{type:'category', data:labels, axisLabel:{color:'#64748b',rotate:30,fontSize:11}},
+      yAxis:{type:'value', axisLabel:{color:'#64748b'}, splitLine:{lineStyle:{color:'#1e2536'}}},
+      series:[{type:'boxplot', data:boxData, itemStyle:{color:'rgba(56,189,248,0.3)', borderColor:'#38bdf8'}}]
+    });
+  }
+  else if (D.chartType === 'pie') {
+    const groups = {};
+    D.data.forEach(r => {
+      const k = String(r[xCol]);
+      if (!groups[k]) groups[k] = 0;
+      if (r[yCol]!==null && r[yCol]!=='') groups[k] += Number(r[yCol]);
+    });
+    const data = Object.entries(groups).map(([name,value])=>({name,value:Math.round(value*100)/100}));
+    chart.setOption({
+      tooltip:{trigger:'item', formatter:'{b}: {c} ({d}%)'},
+      legend:{textStyle:{color:'#64748b'}, bottom:0},
+      series:[{type:'pie', radius:['40%','70%'], center:['50%','45%'],
+        data, label:{color:'#e2e8f0',fontSize:11},
+        itemStyle:{borderColor:'#0b0e14', borderWidth:2},
+        color:accentColors}]
+    });
+  }
+  else if (D.chartType === 'heatmap') {
+    const numCols = D.columns.filter(isNum);
+    const corr = computeCorrelation(numCols);
+    const heatmapData = [];
+    for (let i=0;i<numCols.length;i++) for(let j=0;j<numCols.length;j++) heatmapData.push([j,i,corr[i][j]]);
+    chart.setOption({
+      tooltip:{position:'top', formatter:p=>`${numCols[p.value[1]]} × ${numCols[p.value[0]]}<br/>r = ${p.value[2].toFixed(3)}`},
+      grid:{left:100,right:30,top:20,bottom:80},
+      xAxis:{type:'category',data:numCols,axisLabel:{color:'#64748b',rotate:30,fontSize:11},splitArea:{show:true}},
+      yAxis:{type:'category',data:numCols,axisLabel:{color:'#64748b',fontSize:11},splitArea:{show:true}},
+      visualMap:{min:-1,max:1,calculable:true,orient:'horizontal',left:'center',bottom:0,
+        inRange:{color:['#f87171','#1c2330','#38bdf8']},textStyle:{color:'#64748b'}},
+      series:[{type:'heatmap',data:heatmapData,label:{show:true,fontSize:10,color:'#e2e8f0',formatter:p=>p.value[2].toFixed(2)}}]
+    });
+  }
+}
+
+/* ============ Modal / Operations ============ */
+function openModal(html) {
+  document.getElementById('modalBox').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+function numColOptions(selected) {
+  return D.columns.filter(isNum).map(c=>`<option ${c===selected?'selected':''}>${c}</option>`).join('');
+}
+function allColOptions(selected) {
+  return D.columns.map(c=>`<option ${c===selected?'selected':''}>${c}</option>`).join('');
+}
+
+function handleOp(op) {
+  if (op.startsWith('chart:')) {
+    D.chartType = op.split(':')[1];
+    switchView('charts');
+    renderChartsToolbar(); renderCharts();
+    return;
+  }
+  switch(op) {
+    case 'head':
+      openModal(`<h3>${t('opHead')}</h3>
+        <div class="field"><label>${t('nRows')}</label><input type="number" id="mVal" value="10" min="1" max="${D.data.length}"></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opHead(Number(document.getElementById('mVal').value));closeModal();renderAll();toast('head applied')">${t('confirmApply')}</button></div>`);
+      break;
+    case 'tail':
+      openModal(`<h3>${t('opTail')}</h3>
+        <div class="field"><label>${t('nRows')}</label><input type="number" id="mVal" value="10" min="1" max="${D.data.length}"></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opTail(Number(document.getElementById('mVal').value));closeModal();renderAll();toast('tail applied')">${t('confirmApply')}</button></div>`);
+      break;
+    case 'info': switchView('stats'); toast('info() → stats view'); break;
+    case 'describe': switchView('stats'); toast('describe() → stats view'); break;
+    case 'dtypes': switchView('stats'); break;
+    case 'missing': switchView('stats'); break;
+    case 'dropna':
+      openModal(`<h3>${t('opDropna')}</h3>
+        <div class="field"><label>${t('method')}</label>
+        <select id="mAxis"><option value="0">${t('dropRows')}</option><option value="1">${t('dropCols')}</option></select></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opDropna(Number(document.getElementById('mAxis').value));closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'fillna':
+      openModal(`<h3>${t('opFillna')}</h3>
+        <div class="field"><label>${t('targetCol')}</label><select id="mCol">${allColOptions()}</select></div>
+        <div class="field"><label>${t('method')}</label>
+          <select id="mMethod" onchange="document.getElementById('customVal').style.display=this.value==='custom'?'block':'none'">
+            <option value="mean">${t('fillMean')}</option>
+            <option value="median">${t('fillMedian')}</option>
+            <option value="mode">${t('fillMode')}</option>
+            <option value="custom">${t('fillCustom')}</option>
+          </select></div>
+        <div class="field" id="customVal" style="display:none"><label>${t('fillValue')}</label><input type="text" id="mCustom" placeholder="0"></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opFillna(document.getElementById('mCol').value,document.getElementById('mMethod').value,document.getElementById('mCustom').value);closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'dropdup': opDropDup(); renderAll(); toast('drop_duplicates applied'); break;
+    case 'rename':
+      openModal(`<h3>${t('opRename')}</h3>
+        <div class="field"><label>${t('oldColName')}</label><select id="mOld">${allColOptions()}</select></div>
+        <div class="field"><label>${t('newColName')}</label><input type="text" id="mNew" placeholder="new_name"></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opRename(document.getElementById('mOld').value,document.getElementById('mNew').value);closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'dropcol':
+      openModal(`<h3>${t('opDropCol')}</h3>
+        <div class="field"><label>${t('targetCol')}</label><select id="mCol">${allColOptions()}</select></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-danger" onclick="opDropCol(document.getElementById('mCol').value);closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'astype':
+      openModal(`<h3>${t('opAstype')}</h3>
+        <div class="field"><label>${t('targetCol')}</label><select id="mCol">${allColOptions()}</select></div>
+        <div class="field"><label>${t('method')}</label>
+          <select id="mType"><option value="int">int</option><option value="float">float</option><option value="str">str</option></select></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opAstype(document.getElementById('mCol').value,document.getElementById('mType').value);closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'filter':
+      openModal(`<h3>${t('opFilter')}</h3>
+        <div class="field"><label>${t('conditionCol')}</label><select id="mCol">${allColOptions()}</select></div>
+        <div class="field"><label>${t('conditionOp')}</label>
+          <select id="mOp"><option value=">">&gt;</option><option value="<">&lt;</option><option value=">=">&gt;=</option><option value="<=">&lt;=</option><option value="==">==</option><option value="!=">!=</option></select></div>
+        <div class="field"><label>${t('conditionVal')}</label><input type="text" id="mVal" placeholder="value"></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opFilter(document.getElementById('mCol').value,document.getElementById('mOp').value,document.getElementById('mVal').value);closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'sort':
+      openModal(`<h3>${t('opSort')}</h3>
+        <div class="field"><label>${t('targetCol')}</label><select id="mCol">${allColOptions()}</select></div>
+        <div class="field"><label>${t('method')}</label>
+          <select id="mDir"><option value="1">${t('sortAsc')}</option><option value="0">${t('sortDesc')}</option></select></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opSort(document.getElementById('mCol').value,document.getElementById('mDir').value==='1');closeModal();renderTable();renderStats();renderCharts()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'groupby':
+      openModal(`<h3>${t('opGroupby')}</h3>
+        <div class="field"><label>${t('groupCol')}</label><select id="mG">${allColOptions()}</select></div>
+        <div class="field"><label>${t('aggCol')}</label><select id="mA">${numColOptions()}</select></div>
+        <div class="field"><label>${t('aggFunc')}</label>
+          <select id="mF">
+            <option value="mean">${t('aggMean')}</option><option value="sum">${t('aggSum')}</option>
+            <option value="count">${t('aggCount')}</option><option value="min">${t('aggMin')}</option>
+            <option value="max">${t('aggMax')}</option><option value="median">${t('aggMedian')}</option>
+            <option value="std">${t('aggStd')}</option>
+          </select></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opGroupby(document.getElementById('mG').value,document.getElementById('mA').value,document.getElementById('mF').value);closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'valuecounts':
+      openModal(`<h3>${t('opValueCounts')}</h3>
+        <div class="field"><label>${t('targetCol')}</label><select id="mCol">${allColOptions()}</select></div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="opValueCounts(document.getElementById('mCol').value);closeModal();renderAll()">${t('confirmApply')}</button></div>`);
+      break;
+    case 'selectcols':
+      openModal(`<h3>${t('opSelectCols')}</h3>
+        <div class="field" style="max-height:200px;overflow:auto">
+          ${D.columns.map(c=>`<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer">
+            <input type="checkbox" class="sel-col" value="${c}" checked> ${c}</label>`).join('')}
+        </div>
+        <div class="modal-actions"><button class="btn" onclick="closeModal()">${t('cancel')}</button>
+        <button class="btn btn-primary" onclick="
+          var cols=Array.from(document.querySelectorAll('.sel-col:checked')).map(c=>c.value);
+          opSelectCols(cols);closeModal();renderAll()
+        ">${t('confirmApply')}</button></div>`);
+      break;
+  }
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show success';
+  setTimeout(() => { el.className = 'toast'; }, 2200);
+}
+
+/* ============ View switching ============ */
+function switchView(v) {
+  D.view = v;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  document.querySelectorAll('.view').forEach(el => el.classList.toggle('active', el.id === 'view-' + v));
+  if (v === 'charts') setTimeout(() => renderCharts(), 50);
+  if (v === 'stats') setTimeout(() => renderStats(), 50);
+}
+
+/* ============ Events ============ */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => switchView(btn.dataset.view));
+});
+
+document.getElementById('btnLang').addEventListener('click', () => {
+  LANG = LANG === 'zh' ? 'en' : 'zh';
+  document.getElementById('btnLang').textContent = LANG === 'zh' ? 'EN' : '中';
+  document.documentElement.lang = LANG === 'zh' ? 'zh-CN' : 'en';
+  document.title = LANG === 'zh' ? 'PandasLab · 可视化数据分析工作台' : 'PandasLab · Visual Data Workbench';
+  renderAll();
+});
+
+document.getElementById('btnLoadCSV').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  Papa.parse(file, {
+    header: true,
+    dynamicTyping: true,
+    complete: results => {
+      if (results.data && results.data.length > 0) {
+        loadData(results.data);
+        toast(t('toastDataLoaded'));
+      }
+    }
+  });
+});
+
+document.getElementById('btnReset').addEventListener('click', () => {
+  if (D.original) {
+    D.columns = [...D.original.columns];
+    D.data = JSON.parse(JSON.stringify(D.original.data));
+    D.types = {...D.original.types};
+    D.page = 0; D.sortCol = null; D.history = [];
+    renderAll();
+    toast(t('toastReset'));
+  }
+});
+
+/* ============ Init ============ */
+loadData(generateDefaultData());
+</script>
+</body>
+</html>
